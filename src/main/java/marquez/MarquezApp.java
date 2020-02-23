@@ -24,6 +24,10 @@ import io.dropwizard.flyway.FlywayFactory;
 import io.dropwizard.jdbi3.JdbiFactory;
 import io.dropwizard.setup.Bootstrap;
 import io.dropwizard.setup.Environment;
+import io.prometheus.client.CollectorRegistry;
+import io.prometheus.client.dropwizard.DropwizardExports;
+import io.prometheus.client.exporter.MetricsServlet;
+import io.prometheus.client.hotspot.DefaultExports;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
 import marquez.api.exceptions.MarquezServiceExceptionMapper;
@@ -40,6 +44,7 @@ import marquez.db.JobRunArgsDao;
 import marquez.db.JobRunDao;
 import marquez.db.JobVersionDao;
 import marquez.db.NamespaceDao;
+import marquez.gateway.LineageGraphGateway;
 import marquez.service.DatasetService;
 import marquez.service.DatasourceService;
 import marquez.service.JobService;
@@ -56,6 +61,10 @@ public class MarquezApp extends Application<MarquezConfig> {
   private static final String POSTGRES_DB = "postgresql";
   private static final boolean ERROR_ON_UNDEFINED = false;
 
+  // Monitoring
+  private static final String PROMETHEUS = "prometheus";
+  private static final String PROMETHEUS_ENDPOINT = "/metrics";
+
   public static void main(String[] args) throws Exception {
     new MarquezApp().run(args);
   }
@@ -67,6 +76,12 @@ public class MarquezApp extends Application<MarquezConfig> {
 
   @Override
   public void initialize(@NonNull Bootstrap<MarquezConfig> bootstrap) {
+    // Enable metric collection for prometheus.
+    CollectorRegistry.defaultRegistry.register(
+        new DropwizardExports(bootstrap.getMetricRegistry()));
+    // Add metrics about CPU, JVM memory etc.
+    DefaultExports.initialize();
+
     // Enable variable substitution with environment variables.
     bootstrap.setConfigurationSourceProvider(
         new SubstitutingSourceProvider(
@@ -92,6 +107,9 @@ public class MarquezApp extends Application<MarquezConfig> {
   public void run(@NonNull MarquezConfig config, @NonNull Environment env) throws MarquezException {
     migrateDbOrError(config);
     registerResources(config, env);
+
+    // Expose metrics for monitoring.
+    env.servlets().addServlet(PROMETHEUS, new MetricsServlet()).addMapping(PROMETHEUS_ENDPOINT);
   }
 
   private void migrateDbOrError(@NonNull MarquezConfig config) {
@@ -130,7 +148,6 @@ public class MarquezApp extends Application<MarquezConfig> {
             .installPlugin(new SqlObjectPlugin())
             .installPlugin(new PostgresPlugin());
     jdbi.setSqlLogger(new InstrumentedSqlLogger(env.metrics()));
-
     final NamespaceDao namespaceDao = jdbi.onDemand(NamespaceDao.class);
     final JobDao jobDao = jdbi.onDemand(JobDao.class);
     final JobVersionDao jobVersionDao = jdbi.onDemand(JobVersionDao.class);
@@ -139,11 +156,23 @@ public class MarquezApp extends Application<MarquezConfig> {
     final DatasourceDao datasourceDao = jdbi.onDemand(DatasourceDao.class);
     final DatasetDao datasetDao = jdbi.onDemand(DatasetDao.class);
 
+    CayleyConfiguration cayleyCfg = config.getCayleyConfiguration();
+    final LineageGraphGateway lineageGraphGateway =
+        new LineageGraphGateway(cayleyCfg.getHost(), cayleyCfg.getPort());
+
     final NamespaceService namespaceService = new NamespaceService(namespaceDao);
-    final JobService jobService = new JobService(jobDao, jobVersionDao, jobRunDao, jobRunArgsDao);
+    final JobService jobService =
+        new JobService(
+            jobDao,
+            jobVersionDao,
+            jobRunDao,
+            jobRunArgsDao,
+            datasetDao,
+            lineageGraphGateway,
+            namespaceDao);
     final DatasourceService datasourceService = new DatasourceService(datasourceDao);
     final DatasetService datasetService =
-        new DatasetService(namespaceDao, datasourceDao, datasetDao);
+        new DatasetService(namespaceDao, datasourceDao, datasetDao, lineageGraphGateway);
 
     env.jersey().register(new PingResource());
     env.jersey().register(new HealthResource());

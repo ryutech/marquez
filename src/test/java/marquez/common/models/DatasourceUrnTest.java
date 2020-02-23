@@ -14,9 +14,6 @@
 
 package marquez.common.models;
 
-import static marquez.common.models.CommonModelGenerator.newConnectionUrlWith;
-import static marquez.common.models.CommonModelGenerator.newDatasourceName;
-import static marquez.common.models.CommonModelGenerator.newDatasourceType;
 import static org.junit.Assert.assertEquals;
 
 import marquez.UnitTests;
@@ -26,15 +23,14 @@ import org.junit.experimental.categories.Category;
 @Category(UnitTests.class)
 public class DatasourceUrnTest {
 
-  private static final DatasourceName DATASOURCE_NAME = newDatasourceName();
-  private static final DatasourceType DATASOURCE_TYPE = newDatasourceType();
-
-  private static final ConnectionUrl CONNECTION_URL = newConnectionUrlWith(DATASOURCE_TYPE);
+  private static final ConnectionUrl CONNECTION_URL =
+      ConnectionUrl.fromString("jdbc:postgresql://localhost:5431/novelists_");
 
   private static final String NAMESPACE = "datasource";
-  private static final String VALUE =
-      String.format(
-          "urn:%s:%s:%s", NAMESPACE, DATASOURCE_TYPE.toString(), DATASOURCE_NAME.getValue());
+  private static final String VALUE = String.format("urn:%s:postgresql:test", NAMESPACE);
+
+  private static final DatasourceType DATASOURCE_TYPE = DatasourceType.POSTGRESQL;
+  private static final DatasourceName DATASOURCE_NAME = DatasourceName.fromString("test");
 
   @Test
   public void testNewDatasourceUrn_from() {

@@ -14,6 +14,10 @@
 
 package marquez.service;
 
+import static java.util.Collections.unmodifiableList;
+
+import io.prometheus.client.Counter;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -24,35 +28,79 @@ import java.util.Optional;
 import java.util.UUID;
 import lombok.NonNull;
 import lombok.extern.slf4j.Slf4j;
+import marquez.common.models.DatasetUrn;
+import marquez.common.models.JobName;
 import marquez.common.models.NamespaceName;
+import marquez.db.DatasetDao;
 import marquez.db.JobDao;
 import marquez.db.JobRunArgsDao;
 import marquez.db.JobRunDao;
 import marquez.db.JobVersionDao;
+import marquez.db.NamespaceDao;
+import marquez.db.models.DatasetRowExtended;
+import marquez.db.models.NamespaceRow;
+import marquez.gateway.LineageGraphGateway;
+import marquez.gateway.exceptions.GatewayException;
+import marquez.gateway.models.LineageResultRow;
 import marquez.service.exceptions.MarquezServiceException;
+import marquez.service.mappers.LineageResultMapper;
 import marquez.service.models.Job;
 import marquez.service.models.JobRun;
 import marquez.service.models.JobRunState;
 import marquez.service.models.JobVersion;
+import marquez.service.models.LineageResult;
 import marquez.service.models.RunArgs;
 import org.jdbi.v3.core.statement.UnableToExecuteStatementException;
 
 @Slf4j
 public class JobService {
+  private static final Counter jobs =
+      Counter.build()
+          .namespace("marquez")
+          .name("job_total")
+          .labelNames("namespace")
+          .help("Total number of jobs.")
+          .register();
+
+  private static final Counter jobVersions =
+      Counter.build()
+          .namespace("marquez")
+          .name("job_versions_total")
+          .labelNames("namespace", "job")
+          .help("Total number of versions for a job.")
+          .register();
+
+  private static final Counter jobRuns =
+      Counter.build()
+          .namespace("marquez")
+          .name("job_runs_total")
+          .labelNames("namespace", "job")
+          .help("Total number of runs for a job.")
+          .register();
+
   private final JobDao jobDao;
   private final JobVersionDao jobVersionDao;
   private final JobRunDao jobRunDao;
   private final JobRunArgsDao jobRunArgsDao;
+  private final LineageGraphGateway lineageGraphGateway;
+  private final DatasetDao datasetDao;
+  private final NamespaceDao namespaceDao;
 
   public JobService(
       JobDao jobDao,
       JobVersionDao jobVersionDao,
       JobRunDao jobRunDao,
-      JobRunArgsDao jobRunArgsDao) {
+      JobRunArgsDao jobRunArgsDao,
+      DatasetDao datasetDao,
+      LineageGraphGateway lineageGraphGateway,
+      NamespaceDao namespaceDao) {
     this.jobDao = jobDao;
     this.jobVersionDao = jobVersionDao;
     this.jobRunDao = jobRunDao;
     this.jobRunArgsDao = jobRunArgsDao;
+    this.datasetDao = datasetDao;
+    this.lineageGraphGateway = lineageGraphGateway;
+    this.namespaceDao = namespaceDao;
   }
 
   public Optional<Job> getJob(String namespace, String jobName) throws MarquezServiceException {
@@ -65,9 +113,9 @@ public class JobService {
     }
   }
 
-  public Job createJob(String namespace, Job job) throws MarquezServiceException {
+  public Job createJob(String namespaceJob, Job job) throws MarquezServiceException {
     try {
-      Job existingJob = this.jobDao.findByName(namespace, job.getName());
+      Job existingJob = this.jobDao.findByName(namespaceJob, job.getName());
       if (existingJob == null) {
         Job newJob =
             new Job(
@@ -77,8 +125,11 @@ public class JobService {
                 job.getNamespaceGuid(),
                 job.getDescription(),
                 job.getInputDatasetUrns(),
-                job.getOutputDatasetUrns());
+                job.getOutputDatasetUrns(),
+                job.getType());
         jobDao.insertJobAndVersion(newJob, JobService.createJobVersion(newJob));
+        jobs.labels(namespaceJob).inc();
+        updateJobLineage(newJob, namespaceJob);
         return jobDao.findByID(newJob.getGuid());
       } else {
         Job existingJobWithNewUri =
@@ -89,19 +140,86 @@ public class JobService {
                 existingJob.getNamespaceGuid(),
                 existingJob.getDescription(),
                 existingJob.getInputDatasetUrns(),
-                existingJob.getOutputDatasetUrns());
+                existingJob.getOutputDatasetUrns(),
+                existingJob.getType());
         UUID versionID = JobService.computeVersion(existingJobWithNewUri);
         JobVersion existingJobVersion = jobVersionDao.findByVersion(versionID);
         if (existingJobVersion == null) {
           jobVersionDao.insert(JobService.createJobVersion(existingJobWithNewUri));
+          jobVersions.labels(namespaceJob, job.getName()).inc();
           return jobDao.findByID(existingJob.getGuid());
         }
+        updateJobLineage(existingJobWithNewUri, namespaceJob);
         return existingJob;
       }
     } catch (UnableToExecuteStatementException e) {
       String err = "failed to create new job";
       log.error(err, e);
       throw new MarquezServiceException();
+    }
+  }
+
+  private void updateJobLineage(Job job, String jobNamespace) {
+    job.getInputDatasetUrns()
+        .forEach(
+            inputDatasetUrn -> {
+              DatasetUrn urn = DatasetUrn.fromString(inputDatasetUrn);
+              Optional<DatasetRowExtended> dataset = this.datasetDao.findBy(urn);
+              if (dataset.isPresent()) {
+                try {
+                  Optional<NamespaceRow> namespaceRow =
+                      namespaceDao.findBy(dataset.get().getNamespaceUuid());
+                  this.lineageGraphGateway.linkDatasetToJob(
+                      dataset.get(), job, jobNamespace, namespaceRow.get().getName());
+                  log.info("inserted lineage for dataset->job");
+                } catch (IOException e) {
+                  log.error("error linking lineage", e);
+                }
+              } else {
+                log.warn(
+                    String.format(
+                        "unable to find dataset (urn '%s') to update lineage", urn.getValue()));
+              }
+            });
+    job.getOutputDatasetUrns()
+        .forEach(
+            outputDatasetUrn -> {
+              DatasetUrn urn = DatasetUrn.fromString(outputDatasetUrn);
+              Optional<DatasetRowExtended> dataset = this.datasetDao.findBy(urn);
+              if (dataset.isPresent()) {
+                try {
+                  Optional<NamespaceRow> namespaceRow =
+                      namespaceDao.findBy(dataset.get().getNamespaceUuid());
+                  this.lineageGraphGateway.linkJobToDataset(
+                      job, dataset.get(), jobNamespace, namespaceRow.get().getName());
+                  log.info("inserted lineage for job->dataset");
+                } catch (IOException e) {
+                  log.error("error linking lineage", e);
+                }
+              } else {
+                log.warn(
+                    String.format(
+                        "unable to find dataset (urn '%s') to update lineage", urn.getValue()));
+              }
+            });
+  }
+
+  public Optional<List<LineageResult>> getLineage(
+      @NonNull NamespaceName namespace, @NonNull JobName jobName) throws MarquezServiceException {
+    try {
+      Job job = this.jobDao.findByName(namespace.getValue(), jobName.getValue());
+      if (job == null) {
+        return Optional.empty();
+      }
+      List<LineageResultRow> lineageResults =
+          this.lineageGraphGateway.queryJobSubgraph(job, namespace.getValue());
+      if (lineageResults == null) {
+        throw new MarquezServiceException("error no lineage");
+      }
+      return Optional.of(unmodifiableList(LineageResultMapper.map(lineageResults)));
+    } catch (UnableToExecuteStatementException | GatewayException e) {
+      log.error("error fetching lineage", e);
+      throw new MarquezServiceException("error fetching lineage");
     }
   }
 
@@ -219,6 +337,7 @@ public class JobService {
       } else {
         jobRunDao.insertJobRunAndArgs(jobRun, runArgs);
       }
+      jobRuns.labels(namespaceName, jobName).inc();
       return jobRun;
     } catch (UnableToExecuteStatementException | NoSuchAlgorithmException e) {
       String err = "error creating job run";

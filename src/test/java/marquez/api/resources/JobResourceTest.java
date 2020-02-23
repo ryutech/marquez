@@ -16,12 +16,17 @@ package marquez.api.resources;
 
 import static java.lang.String.format;
 import static javax.ws.rs.client.Entity.entity;
+import static javax.ws.rs.core.Response.Status.OK;
+import static marquez.common.models.CommonModelGenerator.newJobName;
+import static marquez.common.models.CommonModelGenerator.newJobType;
+import static marquez.service.models.ServiceModelGenerator.newLineageResult;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.junit.Assert.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -32,6 +37,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.client.Entity;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
@@ -41,12 +47,17 @@ import marquez.api.models.JobResponse;
 import marquez.api.models.JobRunRequest;
 import marquez.api.models.JobRunResponse;
 import marquez.api.models.JobsResponse;
+import marquez.api.models.LineageResultResponse;
+import marquez.api.models.LineageResultsResponse;
+import marquez.common.models.JobName;
 import marquez.common.models.NamespaceName;
 import marquez.service.JobService;
 import marquez.service.NamespaceService;
 import marquez.service.exceptions.MarquezServiceException;
 import marquez.service.models.Generator;
 import marquez.service.models.JobRun;
+import marquez.service.models.LineageResult;
+import org.eclipse.jetty.http.HttpStatus;
 import org.junit.Before;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -133,15 +144,37 @@ public class JobResourceTest {
   }
 
   @Test
+  public void testCreateJob_invalidType_returnsBadRequestResponse() throws MarquezServiceException {
+    when(MOCK_NAMESPACE_SERVICE.exists(any())).thenReturn(true);
+    final JobRequest jobForJobCreationRequest = generateApiJobRequestWithType("NOSUCHTYPE");
+
+    final Response res = insertJob(newJobName(), jobForJobCreationRequest);
+
+    assertEquals(HttpStatus.BAD_REQUEST_400, res.getStatus());
+    verify(MOCK_JOB_SERVICE, never()).createJob(any(), any());
+  }
+
+  @Test
   public void testDescriptionOptionalForCreateJobInputs() throws MarquezServiceException {
     when(MOCK_NAMESPACE_SERVICE.exists(any())).thenReturn(true);
     when(MOCK_NAMESPACE_SERVICE.get(any())).thenReturn(Optional.of(Generator.genNamespace()));
-
     JobResponse jobForJobCreationRequest = generateApiJob();
     jobForJobCreationRequest.setDescription(null);
 
     insertJob(jobForJobCreationRequest);
-    verify(MOCK_JOB_SERVICE, times(1)).createJob(any(), any());
+
+    verify(MOCK_JOB_SERVICE).createJob(any(), any());
+  }
+
+  @Test
+  public void testTypeOptionalForCreateJobInputs() throws MarquezServiceException {
+    when(MOCK_NAMESPACE_SERVICE.exists(any())).thenReturn(true);
+    when(MOCK_NAMESPACE_SERVICE.get(any())).thenReturn(Optional.of(Generator.genNamespace()));
+    final JobRequest jobForJobCreationRequest = generateApiJobRequestWithType(null);
+
+    insertJob(newJobName(), jobForJobCreationRequest);
+
+    verify(MOCK_JOB_SERVICE).createJob(any(), any());
   }
 
   @Test
@@ -180,8 +213,8 @@ public class JobResourceTest {
     when(MOCK_JOB_SERVICE.getAllJobsInNamespace(NAMESPACE_NAME.getValue()))
         .thenThrow(new MarquezServiceException());
 
-    String path = format("/api/v1/namespaces/%s/jobs", NAMESPACE_NAME.getValue());
-    Response res = resources.client().target(path).request(MediaType.APPLICATION_JSON).get();
+    final String path = format("/api/v1/namespaces/%s/jobs", NAMESPACE_NAME.getValue());
+    final Response res = resources.client().target(path).request(MediaType.APPLICATION_JSON).get();
     assertEquals(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), res.getStatus());
   }
 
@@ -390,6 +423,45 @@ public class JobResourceTest {
     JOB_RESOURCE.getRunsForJob(NAMESPACE_NAME, job.getName(), TEST_LIMIT, TEST_OFFSET);
   }
 
+  @Test
+  public void testLineage_OK() throws MarquezServiceException {
+    JobName jobName = newJobName();
+    Optional<List<LineageResult>> lineageResults =
+        Optional.of(Arrays.asList(newLineageResult(), newLineageResult()));
+    when(MOCK_NAMESPACE_SERVICE.exists(NAMESPACE_NAME)).thenReturn(true);
+    when(MOCK_JOB_SERVICE.getLineage(NAMESPACE_NAME, jobName)).thenReturn(lineageResults);
+
+    final Response response = JOB_RESOURCE.lineage(NAMESPACE_NAME, jobName);
+
+    LineageResultsResponse lineageResultsResponse = (LineageResultsResponse) response.getEntity();
+    List<LineageResultResponse> responseResults = lineageResultsResponse.getResults();
+    verify(MOCK_JOB_SERVICE).getLineage(NAMESPACE_NAME, jobName);
+    assertThat(response.getStatusInfo()).isEqualTo(OK);
+    assertThat(responseResults.size()).isEqualTo(lineageResults.get().size());
+  }
+
+  @Test
+  public void testLineage_JobNotFound_Err() throws MarquezServiceException {
+    JobName jobName = newJobName();
+    Optional<List<LineageResult>> noResults = Optional.empty();
+    when(MOCK_NAMESPACE_SERVICE.exists(NAMESPACE_NAME)).thenReturn(true);
+    when(MOCK_JOB_SERVICE.getLineage(NAMESPACE_NAME, jobName)).thenReturn(noResults);
+
+    assertThatExceptionOfType(NotFoundException.class)
+        .isThrownBy(() -> JOB_RESOURCE.lineage(NAMESPACE_NAME, jobName));
+  }
+
+  @Test
+  public void testLineage_ServiceException_Err() throws MarquezServiceException {
+    JobName jobName = newJobName();
+    when(MOCK_NAMESPACE_SERVICE.exists(NAMESPACE_NAME)).thenReturn(true);
+    when(MOCK_JOB_SERVICE.getLineage(NAMESPACE_NAME, jobName))
+        .thenThrow(MarquezServiceException.class);
+
+    assertThatExceptionOfType(MarquezServiceException.class)
+        .isThrownBy(() -> JOB_RESOURCE.lineage(NAMESPACE_NAME, jobName));
+  }
+
   private Response getJobRun(String jobRunId) {
     String path = format("/api/v1/jobs/runs/%s", NAMESPACE_NAME.getValue(), jobRunId);
     return resources.client().target(path).request(MediaType.APPLICATION_JSON).get();
@@ -406,8 +478,18 @@ public class JobResourceTest {
             job.getInputDatasetUrns(),
             job.getOutputDatasetUrns(),
             job.getLocation(),
-            job.getDescription());
+            job.getDescription(),
+            job.getType());
     String path = format("/api/v1/namespaces/%s/jobs/%s", NAMESPACE_NAME.getValue(), job.getName());
+    return resources
+        .client()
+        .target(path)
+        .request(MediaType.APPLICATION_JSON)
+        .put(entity(jobRequest, javax.ws.rs.core.MediaType.APPLICATION_JSON));
+  }
+
+  private Response insertJob(JobName jobName, JobRequest jobRequest) {
+    String path = format("/api/v1/namespaces/%s/jobs/%s", NAMESPACE_NAME.getValue(), jobName);
     return resources
         .client()
         .target(path)
@@ -471,7 +553,20 @@ public class JobResourceTest {
     final String description = "someDescription";
     final List<String> inputList = Collections.singletonList("input1");
     final List<String> outputList = Collections.singletonList("output1");
-    return new JobResponse(jobName, null, null, inputList, outputList, location, description);
+    final String type = newJobType().toString();
+    return new JobResponse(jobName, null, null, inputList, outputList, location, description, type);
+  }
+
+  JobRequest generateApiJobRequest() {
+    return generateApiJobRequestWithType(newJobType().toString());
+  }
+
+  JobRequest generateApiJobRequestWithType(String type) {
+    final String location = "someLocation";
+    final String description = "someDescription";
+    final List<String> inputList = Collections.singletonList("input1");
+    final List<String> outputList = Collections.singletonList("output1");
+    return new JobRequest(inputList, outputList, location, description, type);
   }
 
   JobRunResponse generateApiJobRun() {

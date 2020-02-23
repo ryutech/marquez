@@ -14,6 +14,7 @@
 
 package marquez.service;
 
+import io.prometheus.client.Counter;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
@@ -32,6 +33,13 @@ import org.jdbi.v3.core.statement.UnableToExecuteStatementException;
 
 @Slf4j
 public class DatasourceService {
+  private static final Counter datasources =
+      Counter.build()
+          .namespace("marquez")
+          .name("datasource_total")
+          .help("Total number of datasources.")
+          .register();
+
   private final DatasourceDao datasourceDao;
 
   public DatasourceService(@NonNull final DatasourceDao datasourceDao) {
@@ -40,8 +48,6 @@ public class DatasourceService {
 
   public Datasource create(@NonNull ConnectionUrl connectionUrl, @NonNull DatasourceName name)
       throws MarquezServiceException {
-    final DatasourceRow row = DatasourceRowMapper.map(connectionUrl, name);
-
     try {
       // Check if its already there based on its name. If so, return
       final Optional<DatasourceRow> existingRowIfFound = datasourceDao.findBy(name);
@@ -49,10 +55,16 @@ public class DatasourceService {
         return DatasourceMapper.map(existingRowIfFound.get());
       }
 
-      Optional<DatasourceRow> insertedRow = datasourceDao.insert(row);
-      return insertedRow.map(DatasourceMapper::map).orElseThrow(MarquezServiceException::new);
+      final DatasourceRow newRow = DatasourceRowMapper.map(connectionUrl, name);
+      final Datasource datasource =
+          datasourceDao
+              .insert(newRow)
+              .map(DatasourceMapper::map)
+              .orElseThrow(MarquezServiceException::new);
+      datasources.inc();
+      return datasource;
     } catch (UnableToExecuteStatementException e) {
-      log.error("Database issue while trying to create datasource " + name, e.getMessage());
+      log.error("Failed to create datasource: {}", name, e);
       throw new MarquezServiceException();
     }
   }

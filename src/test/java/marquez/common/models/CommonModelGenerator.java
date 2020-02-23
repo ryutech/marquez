@@ -92,12 +92,8 @@ public final class CommonModelGenerator {
   }
 
   public static ConnectionUrl newConnectionUrl() {
-    return newConnectionUrlWith(newDatasourceType());
-  }
-
-  public static ConnectionUrl newConnectionUrlWith(DatasourceType datasourceType) {
     return newConnectionUrlWith(
-        String.format("jdbc:%s://localhost:5432/%s", datasourceType, newDbName().getValue()));
+        String.format("jdbc:%s://localhost:5432/%s", newDatasourceType(), newDbName().getValue()));
   }
 
   public static ConnectionUrl newConnectionUrlWith(String value) {
@@ -126,6 +122,10 @@ public final class CommonModelGenerator {
 
   public static Description newDescription() {
     return newDescriptionWith("test_description" + newId());
+  }
+
+  public static JobType newJobType() {
+    return JobType.fromString("SERVICE");
   }
 
   public static Description newDescriptionWith(String value) {

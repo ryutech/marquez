@@ -35,14 +35,19 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.Response;
 import lombok.extern.slf4j.Slf4j;
+import marquez.api.exceptions.JobNotFoundException;
+import marquez.api.exceptions.NamespaceNotFoundException;
 import marquez.api.mappers.JobMapper;
 import marquez.api.mappers.JobResponseMapper;
 import marquez.api.mappers.JobRunResponseMapper;
+import marquez.api.mappers.LineageResultsResponseMapper;
 import marquez.api.models.JobRequest;
 import marquez.api.models.JobResponse;
 import marquez.api.models.JobRunRequest;
 import marquez.api.models.JobsResponse;
+import marquez.api.models.LineageResultsResponse;
 import marquez.common.models.JobName;
+import marquez.common.models.JobType;
 import marquez.common.models.NamespaceName;
 import marquez.service.JobService;
 import marquez.service.NamespaceService;
@@ -50,6 +55,8 @@ import marquez.service.exceptions.MarquezServiceException;
 import marquez.service.models.Job;
 import marquez.service.models.JobRun;
 import marquez.service.models.JobRunState;
+import marquez.service.models.LineageResult;
+import org.eclipse.jetty.http.HttpStatus;
 
 @Slf4j
 @Path("/api/v1")
@@ -77,6 +84,11 @@ public final class JobResource {
     if (!namespaceService.exists(namespaceName)) {
       return Response.status(Response.Status.NOT_FOUND).build();
     }
+    if (request.getType().isPresent() && !JobType.isValid(request.getType().get())) {
+      return Response.status(HttpStatus.BAD_REQUEST_400)
+          .entity("Bad value for Job type " + request.getType().get())
+          .build();
+    }
     final Job newJob = JobMapper.map(jobName, request);
     newJob.setNamespaceGuid(namespaceService.get(namespaceName).get().getGuid());
     final Job job = jobService.createJob(namespaceName.getValue(), newJob);
@@ -102,6 +114,25 @@ public final class JobResource {
       return Response.ok().entity(JobResponseMapper.map(returnedJob.get())).build();
     }
     return Response.status(Response.Status.NOT_FOUND).build();
+  }
+
+  @Timed
+  @ResponseMetered
+  @ExceptionMetered
+  @GET
+  @Path("/namespaces/{namespace}/jobs/{job}/lineage")
+  @Produces(APPLICATION_JSON)
+  public Response lineage(
+      @PathParam("namespace") NamespaceName namespaceName, @PathParam("job") final JobName jobName)
+      throws MarquezServiceException {
+    throwIfNotExists(namespaceName);
+    final List<LineageResult> lineageResults =
+        jobService
+            .getLineage(namespaceName, jobName)
+            .orElseThrow(() -> new JobNotFoundException(jobName));
+    LineageResultsResponse response =
+        LineageResultsResponseMapper.toLineageResultsResponse(lineageResults);
+    return Response.ok(response).build();
   }
 
   @Timed
@@ -237,5 +268,11 @@ public final class JobResource {
       return Response.ok().build();
     }
     return Response.status(Response.Status.NOT_FOUND).build();
+  }
+
+  private void throwIfNotExists(NamespaceName namespaceName) throws MarquezServiceException {
+    if (!namespaceService.exists(namespaceName)) {
+      throw new NamespaceNotFoundException(namespaceName);
+    }
   }
 }

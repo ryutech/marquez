@@ -20,6 +20,22 @@ import io.dropwizard.db.DataSourceFactory;
 import io.dropwizard.flyway.FlywayFactory;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.validator.constraints.NotEmpty;
+
+class CayleyConfiguration {
+  @NotEmpty private String host;
+  @NotEmpty private int port;
+
+  @JsonProperty
+  public String getHost() {
+    return host;
+  }
+
+  @JsonProperty
+  public int getPort() {
+    return port;
+  }
+}
 
 @NoArgsConstructor
 public final class MarquezConfig extends Configuration {
@@ -30,4 +46,12 @@ public final class MarquezConfig extends Configuration {
   @Getter
   @JsonProperty("flyway")
   private final FlywayFactory flywayFactory = new FlywayFactory();
+
+  @Getter
+  @JsonProperty("cayley")
+  private CayleyConfiguration cayley = new CayleyConfiguration();
+
+  public CayleyConfiguration getCayleyConfiguration() {
+    return cayley;
+  }
 }

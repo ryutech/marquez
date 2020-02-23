@@ -28,4 +28,8 @@ public final class NamespaceRow {
   private String name;
   private String description;
   private String currentOwnerName;
+
+  public Boolean isNew() {
+    return createdAt.equals(updatedAt);
+  }
 }

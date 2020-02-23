@@ -17,6 +17,7 @@ package marquez.db.mappers;
 import static marquez.common.models.CommonModelGenerator.newDatasetUrn;
 import static marquez.common.models.CommonModelGenerator.newDescription;
 import static marquez.common.models.CommonModelGenerator.newJobName;
+import static marquez.common.models.CommonModelGenerator.newJobType;
 import static marquez.common.models.CommonModelGenerator.newLocation;
 import static marquez.common.models.Description.NO_DESCRIPTION;
 import static marquez.db.models.DbModelGenerator.newNamespaceRow;
@@ -25,7 +26,6 @@ import static marquez.db.models.DbModelGenerator.newTimestamp;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -40,6 +40,7 @@ import java.util.UUID;
 import marquez.UnitTests;
 import marquez.common.models.Description;
 import marquez.common.models.JobName;
+import marquez.common.models.JobType;
 import marquez.db.Columns;
 import marquez.service.models.Job;
 import org.jdbi.v3.core.statement.StatementContext;
@@ -61,6 +62,7 @@ public class JobRowMapperTest {
   private static final String[] OUTPUT_DATASET_URNS = new String[] {newDatasetUrn().getValue()};
   private static final Instant CREATED_AT = newTimestamp();
   private static final Instant UPDATED_AT = CREATED_AT;
+  private static final JobType JOB_TYPE = newJobType();
 
   @Rule public MockitoRule rule = MockitoJUnit.rule();
 
@@ -82,6 +84,7 @@ public class JobRowMapperTest {
     when(results.getObject(Columns.OUTPUT_DATASET_URNS)).thenReturn(exists);
     when(results.getObject(Columns.CREATED_AT)).thenReturn(exists);
     when(results.getObject(Columns.UPDATED_AT)).thenReturn(exists);
+    when(results.getObject(Columns.JOB_TYPE)).thenReturn(exists);
 
     when(results.getObject(Columns.ROW_UUID, UUID.class)).thenReturn(ROW_UUID);
     when(results.getString(Columns.NAME)).thenReturn(NAME.getValue());
@@ -94,6 +97,7 @@ public class JobRowMapperTest {
     when(results.getArray(Columns.OUTPUT_DATASET_URNS)).thenReturn(outputArray);
     when(results.getTimestamp(Columns.CREATED_AT)).thenReturn(Timestamp.from(CREATED_AT));
     when(results.getTimestamp(Columns.UPDATED_AT)).thenReturn(Timestamp.from(UPDATED_AT));
+    when(results.getString(Columns.JOB_TYPE)).thenReturn(JOB_TYPE.toString());
 
     final JobRowMapper jobRowMapper = new JobRowMapper();
     final Job job = jobRowMapper.map(results, context);
@@ -106,6 +110,7 @@ public class JobRowMapperTest {
     assertThat(job.getOutputDatasetUrns()).isEqualTo(Arrays.asList(OUTPUT_DATASET_URNS));
     assertThat(job.getCreatedAt()).isEqualTo(CREATED_AT);
     assertThat(job.getUpdatedAt()).isEqualTo(UPDATED_AT);
+    assertThat(job.getType()).isEqualTo(JOB_TYPE);
   }
 
   @Test
@@ -122,6 +127,7 @@ public class JobRowMapperTest {
     when(results.getObject(Columns.OUTPUT_DATASET_URNS)).thenReturn(exists);
     when(results.getObject(Columns.CREATED_AT)).thenReturn(exists);
     when(results.getObject(Columns.UPDATED_AT)).thenReturn(exists);
+    when(results.getObject(Columns.JOB_TYPE)).thenReturn(exists);
 
     when(results.getObject(Columns.ROW_UUID, UUID.class)).thenReturn(ROW_UUID);
     when(results.getString(Columns.NAME)).thenReturn(NAME.getValue());
@@ -133,6 +139,7 @@ public class JobRowMapperTest {
     when(results.getArray(Columns.OUTPUT_DATASET_URNS)).thenReturn(outputArray);
     when(results.getTimestamp(Columns.CREATED_AT)).thenReturn(Timestamp.from(CREATED_AT));
     when(results.getTimestamp(Columns.UPDATED_AT)).thenReturn(Timestamp.from(UPDATED_AT));
+    when(results.getString(Columns.JOB_TYPE)).thenReturn(JOB_TYPE.toString());
 
     final JobRowMapper jobRowMapper = new JobRowMapper();
     final Job job = jobRowMapper.map(results, context);
@@ -145,8 +152,9 @@ public class JobRowMapperTest {
     assertThat(job.getOutputDatasetUrns()).isEqualTo(Arrays.asList(OUTPUT_DATASET_URNS));
     assertThat(job.getCreatedAt()).isEqualTo(CREATED_AT);
     assertThat(job.getUpdatedAt()).isEqualTo(UPDATED_AT);
+    assertThat(job.getType()).isEqualTo(JOB_TYPE);
 
-    verify(results, never()).getString(Columns.DESCRIPTION);
+    verify(results).getString(Columns.DESCRIPTION);
   }
 
   @Test

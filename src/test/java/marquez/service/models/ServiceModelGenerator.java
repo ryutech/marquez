@@ -23,12 +23,14 @@ import static marquez.common.models.CommonModelGenerator.newDatasourceName;
 import static marquez.common.models.CommonModelGenerator.newDatasourceUrn;
 import static marquez.common.models.CommonModelGenerator.newDescription;
 import static marquez.common.models.CommonModelGenerator.newJobName;
+import static marquez.common.models.CommonModelGenerator.newJobType;
 import static marquez.common.models.CommonModelGenerator.newLocation;
 import static marquez.common.models.CommonModelGenerator.newNamespaceName;
 import static marquez.common.models.CommonModelGenerator.newOwnerName;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Random;
 import java.util.stream.Stream;
 import marquez.common.models.ConnectionUrl;
 import marquez.common.models.DatasetName;
@@ -36,8 +38,11 @@ import marquez.common.models.DatasetUrn;
 import marquez.common.models.DatasourceName;
 import marquez.common.models.DatasourceUrn;
 import marquez.common.models.Description;
+import marquez.common.models.JobType;
 
 public final class ServiceModelGenerator {
+  private static final Random RANDOM = new Random();
+
   private ServiceModelGenerator() {}
 
   public static List<Namespace> newNamespaces(int limit) {
@@ -108,6 +113,10 @@ public final class ServiceModelGenerator {
   }
 
   public static Job newJob(boolean hasDescription) {
+    return newJobWithType(hasDescription, newJobType());
+  }
+
+  public static Job newJobWithType(boolean hasDescription, JobType type) {
     final Instant createdAt = newTimestamp();
     final Instant updatedAt = createdAt;
     return new Job(
@@ -119,7 +128,8 @@ public final class ServiceModelGenerator {
         newDatasetUrns(4).stream().map(DatasetUrn::getValue).collect(toList()),
         newDatasetUrns(2).stream().map(DatasetUrn::getValue).collect(toList()),
         createdAt,
-        updatedAt);
+        updatedAt,
+        type);
   }
 
   public static List<JobRun> newJobRuns(int limit) {
@@ -130,7 +140,22 @@ public final class ServiceModelGenerator {
     return new JobRun(null, 0, null, null, null, null, null, newTimestamp());
   }
 
-  public static Instant newTimestamp() {
+  public static LineageResult newLineageResult() {
+    return new LineageResult(
+        String.format("job%d", newId()),
+        "job",
+        "testNamespace",
+        "to",
+        String.format("dataset%d", newId()),
+        "dataset",
+        "testNamespace");
+  }
+
+  private static Instant newTimestamp() {
     return Instant.now();
+  }
+
+  private static int newId() {
+    return RANDOM.nextInt(Integer.MAX_VALUE - 1);
   }
 }

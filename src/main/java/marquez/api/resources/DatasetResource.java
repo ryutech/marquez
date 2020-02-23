@@ -35,15 +35,18 @@ import marquez.api.exceptions.DatasetUrnNotFoundException;
 import marquez.api.exceptions.NamespaceNotFoundException;
 import marquez.api.mappers.DatasetMapper;
 import marquez.api.mappers.DatasetResponseMapper;
+import marquez.api.mappers.LineageResultsResponseMapper;
 import marquez.api.models.DatasetRequest;
 import marquez.api.models.DatasetResponse;
 import marquez.api.models.DatasetsResponse;
+import marquez.api.models.LineageResultsResponse;
 import marquez.common.models.DatasetUrn;
 import marquez.common.models.NamespaceName;
 import marquez.service.DatasetService;
 import marquez.service.NamespaceService;
 import marquez.service.exceptions.MarquezServiceException;
 import marquez.service.models.Dataset;
+import marquez.service.models.LineageResult;
 
 @Path("/api/v1/namespaces/{namespace}/datasets")
 public final class DatasetResource {
@@ -86,6 +89,23 @@ public final class DatasetResource {
     final Dataset dataset =
         datasetService.get(urn).orElseThrow(() -> new DatasetUrnNotFoundException(urn));
     final DatasetResponse response = DatasetResponseMapper.map(dataset);
+    return Response.ok(response).build();
+  }
+
+  @Timed
+  @ResponseMetered
+  @ExceptionMetered
+  @GET
+  @Path("{urn}/lineage")
+  @Produces(APPLICATION_JSON)
+  public Response lineage(
+      @PathParam("namespace") NamespaceName namespaceName, @PathParam("urn") DatasetUrn urn)
+      throws MarquezServiceException {
+    throwIfNotExists(namespaceName);
+    final List<LineageResult> lineageResults =
+        datasetService.getLineage(urn).orElseThrow(() -> new DatasetUrnNotFoundException(urn));
+    LineageResultsResponse response =
+        LineageResultsResponseMapper.toLineageResultsResponse(lineageResults);
     return Response.ok(response).build();
   }
 

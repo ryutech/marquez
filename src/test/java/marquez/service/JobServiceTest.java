@@ -1,5 +1,10 @@
 package marquez.service;
 
+import static marquez.common.models.CommonModelGenerator.newNamespaceNameWith;
+import static marquez.gateway.models.GatewayModelGenerator.newLineageResultRow;
+import static marquez.service.models.Generator.genJob;
+import static marquez.service.models.ServiceModelGenerator.newJob;
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.mockito.ArgumentMatchers.any;
@@ -12,20 +17,28 @@ import static org.mockito.Mockito.when;
 
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import marquez.common.models.JobName;
 import marquez.common.models.NamespaceName;
+import marquez.db.DatasetDao;
 import marquez.db.JobDao;
 import marquez.db.JobRunArgsDao;
 import marquez.db.JobRunDao;
 import marquez.db.JobVersionDao;
+import marquez.db.NamespaceDao;
+import marquez.gateway.LineageGraphGateway;
+import marquez.gateway.exceptions.GatewayException;
+import marquez.gateway.models.LineageResultRow;
 import marquez.service.exceptions.MarquezServiceException;
 import marquez.service.models.Generator;
 import marquez.service.models.Job;
 import marquez.service.models.JobRun;
 import marquez.service.models.JobRunState;
 import marquez.service.models.JobVersion;
+import marquez.service.models.LineageResult;
 import org.jdbi.v3.core.statement.UnableToExecuteStatementException;
 import org.junit.Assert;
 import org.junit.Before;
@@ -40,20 +53,33 @@ public class JobServiceTest {
   final String TEST_NS = "test_namespace";
   private static final int TEST_LIMIT = 20;
   private static final int TEST_OFFSET = 0;
+  final String TEST_JOBNAME = "test_jobName";
 
   @Rule public MockitoRule rule = MockitoJUnit.rule();
 
+  @Mock private NamespaceDao namespaceDao;
   @Mock private JobDao jobDao;
   @Mock private JobVersionDao jobVersionDao;
   @Mock private JobRunDao jobRunDao;
   @Mock private JobRunArgsDao jobRunArgsDao;
+  @Mock private LineageGraphGateway lineageGraphGateway;
+  @Mock private DatasetDao datasetDao;
+
   private static final UUID namespaceID = UUID.randomUUID();
 
   JobService jobService;
 
   @Before
   public void setUp() {
-    jobService = new JobService(jobDao, jobVersionDao, jobRunDao, jobRunArgsDao);
+    jobService =
+        new JobService(
+            jobDao,
+            jobVersionDao,
+            jobRunDao,
+            jobRunArgsDao,
+            datasetDao,
+            lineageGraphGateway,
+            namespaceDao);
   }
 
   private void assertJobFieldsMatch(Job job1, Job job2) {
@@ -64,6 +90,7 @@ public class JobServiceTest {
     assertEquals(job1.getNamespaceGuid(), job2.getNamespaceGuid());
     assertEquals(job1.getInputDatasetUrns(), job2.getInputDatasetUrns());
     assertEquals(job1.getOutputDatasetUrns(), job2.getOutputDatasetUrns());
+    assertEquals(job1.getType(), job2.getType());
   }
 
   @Test
@@ -300,5 +327,54 @@ public class JobServiceTest {
     when(jobRunDao.findAllByJobUuid(job.getGuid(), TEST_LIMIT, TEST_OFFSET))
         .thenThrow(UnableToExecuteStatementException.class);
     jobService.getAllRunsOfJob(jobNamespace, job.getName(), TEST_LIMIT, TEST_OFFSET);
+  }
+
+  @Test
+  public void testGetLineage_OK() throws MarquezServiceException, GatewayException {
+    Job job = genJob();
+    JobName jobName = JobName.fromString(job.getName());
+    NamespaceName namespaceName = newNamespaceNameWith(TEST_NS);
+    List<LineageResultRow> lineageResultRows =
+        Arrays.asList(newLineageResultRow(), newLineageResultRow());
+    when(jobDao.findByName(TEST_NS, job.getName())).thenReturn(job);
+    when(lineageGraphGateway.queryJobSubgraph(job, TEST_NS)).thenReturn(lineageResultRows);
+    Optional<List<LineageResult>> results = jobService.getLineage(namespaceName, jobName);
+    verify(jobDao).findByName(namespaceName.getValue(), jobName.getValue());
+    verify(lineageGraphGateway).queryJobSubgraph(job, TEST_NS);
+    assertThat(results.isPresent());
+    assertThat(results.get().size()).isEqualTo(lineageResultRows.size());
+  }
+
+  @Test
+  public void testGetLineage_JobNotFound() throws MarquezServiceException, GatewayException {
+    Job job = genJob();
+    JobName jobName = JobName.fromString(job.getName());
+    when(jobDao.findByName(TEST_NS, jobName.getValue())).thenReturn(null);
+    NamespaceName namespaceName = newNamespaceNameWith(TEST_NS);
+    Optional<List<LineageResult>> results = jobService.getLineage(namespaceName, jobName);
+
+    assertThat(results.isPresent()).isFalse();
+  }
+
+  @Test(expected = MarquezServiceException.class)
+  public void testGetLineage_UnableToExecuteStatementException_Err()
+      throws MarquezServiceException, GatewayException {
+    Job job = genJob();
+    JobName jobName = JobName.fromString(job.getName());
+    when(jobDao.findByName(TEST_NS, jobName.getValue()))
+        .thenThrow(UnableToExecuteStatementException.class);
+    NamespaceName namespaceName = newNamespaceNameWith(TEST_NS);
+    jobService.getLineage(namespaceName, jobName);
+  }
+
+  @Test(expected = MarquezServiceException.class)
+  public void testGetLineage_GatewayException_Err()
+      throws MarquezServiceException, GatewayException {
+    Job job = genJob();
+    JobName jobName = JobName.fromString(job.getName());
+    when(jobDao.findByName(TEST_NS, jobName.getValue())).thenReturn(job);
+    when(lineageGraphGateway.queryJobSubgraph(job, TEST_NS)).thenThrow(GatewayException.class);
+    NamespaceName namespaceName = newNamespaceNameWith(TEST_NS);
+    jobService.getLineage(namespaceName, jobName);
   }
 }

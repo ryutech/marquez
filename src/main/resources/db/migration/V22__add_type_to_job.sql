@@ -1,0 +1,5 @@
+DROP TYPE IF EXISTS type;
+CREATE TYPE type AS ENUM ('BATCH', 'SERVICE', 'STREAM');
+
+ALTER TABLE jobs
+ADD COLUMN if not exists type TYPE;

@@ -17,22 +17,26 @@ package marquez.api.resources;
 import static javax.ws.rs.core.Response.Status.OK;
 import static marquez.common.models.CommonModelGenerator.newConnectionUrl;
 import static marquez.common.models.CommonModelGenerator.newDatasetName;
+import static marquez.common.models.CommonModelGenerator.newDatasetUrn;
 import static marquez.common.models.CommonModelGenerator.newDatasourceName;
 import static marquez.common.models.CommonModelGenerator.newDescription;
 import static marquez.common.models.CommonModelGenerator.newNamespaceName;
 import static marquez.service.models.ServiceModelGenerator.newDatasetWith;
 import static marquez.service.models.ServiceModelGenerator.newDatasets;
+import static marquez.service.models.ServiceModelGenerator.newLineageResult;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
-import static org.mockito.Mockito.any;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
+import javax.ws.rs.NotFoundException;
 import javax.ws.rs.core.Response;
 import marquez.UnitTests;
 import marquez.api.exceptions.DatasetUrnNotFoundException;
@@ -41,6 +45,8 @@ import marquez.api.mappers.DatasetResponseMapper;
 import marquez.api.models.DatasetRequest;
 import marquez.api.models.DatasetResponse;
 import marquez.api.models.DatasetsResponse;
+import marquez.api.models.LineageResultResponse;
+import marquez.api.models.LineageResultsResponse;
 import marquez.common.models.ConnectionUrl;
 import marquez.common.models.DatasetName;
 import marquez.common.models.DatasetUrn;
@@ -52,6 +58,7 @@ import marquez.service.DatasetService;
 import marquez.service.NamespaceService;
 import marquez.service.exceptions.MarquezServiceException;
 import marquez.service.models.Dataset;
+import marquez.service.models.LineageResult;
 import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
@@ -205,5 +212,43 @@ public class DatasetResourceTest {
         .isThrownBy(() -> datasetResource.list(NAMESPACE_NAME, LIMIT, OFFSET));
 
     verify(datasetService, never()).getAll(NAMESPACE_NAME, LIMIT, OFFSET);
+  }
+
+  @Test
+  public void testLineage_OK() throws MarquezServiceException {
+    DatasetUrn datasetUrn = newDatasetUrn();
+    Optional<List<LineageResult>> lineageResults =
+        Optional.of(Arrays.asList(newLineageResult(), newLineageResult()));
+    when(namespaceService.exists(NAMESPACE_NAME)).thenReturn(true);
+    when(datasetService.getLineage(datasetUrn)).thenReturn(lineageResults);
+
+    final Response response = datasetResource.lineage(NAMESPACE_NAME, datasetUrn);
+
+    LineageResultsResponse lineageResultsResponse = (LineageResultsResponse) response.getEntity();
+    List<LineageResultResponse> responseResults = lineageResultsResponse.getResults();
+    verify(datasetService).getLineage(datasetUrn);
+    assertThat(response.getStatusInfo()).isEqualTo(OK);
+    assertThat(responseResults.size()).isEqualTo(lineageResults.get().size());
+  }
+
+  @Test
+  public void testLineage_DatasetNotFound_Err() throws MarquezServiceException {
+    DatasetUrn datasetUrn = newDatasetUrn();
+    Optional<List<LineageResult>> noResults = Optional.empty();
+    when(namespaceService.exists(NAMESPACE_NAME)).thenReturn(true);
+    when(datasetService.getLineage(datasetUrn)).thenReturn(noResults);
+
+    assertThatExceptionOfType(NotFoundException.class)
+        .isThrownBy(() -> datasetResource.lineage(NAMESPACE_NAME, datasetUrn));
+  }
+
+  @Test
+  public void testLineage_ServiceException_Err() throws MarquezServiceException {
+    DatasetUrn datasetUrn = newDatasetUrn();
+    when(namespaceService.exists(NAMESPACE_NAME)).thenReturn(true);
+    when(datasetService.getLineage(datasetUrn)).thenThrow(MarquezServiceException.class);
+
+    assertThatExceptionOfType(MarquezServiceException.class)
+        .isThrownBy(() -> datasetResource.lineage(NAMESPACE_NAME, datasetUrn));
   }
 }

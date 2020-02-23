@@ -23,13 +23,12 @@ import marquez.common.models.DatasetName;
 import marquez.common.models.DatasetUrn;
 import marquez.common.models.DatasourceName;
 import marquez.common.models.DatasourceUrn;
-import marquez.common.models.NamespaceName;
+import marquez.common.models.JobType;
 import marquez.db.models.DatasetRow;
 import marquez.db.models.DatasourceRow;
 import marquez.db.models.DbTableInfoRow;
 import marquez.db.models.DbTableVersionRow;
 
-@Deprecated
 public class Generator {
   private static Random rand = new Random();
 
@@ -56,10 +55,28 @@ public class Generator {
         "http://foo.bar/" + jobNum,
         namespaceID,
         null,
+        Arrays.asList(genDatasetUrn().getValue(), genDatasetUrn().getValue()),
+        Arrays.asList(genDatasetUrn().getValue(), genDatasetUrn().getValue()),
+        createdAt,
+        updatedAt,
+        JobType.fromString("SERVICE"));
+  }
+
+  public static Job genJobWithType(UUID namespaceID, JobType type) {
+    final Instant createdAt = Instant.now();
+    final Instant updatedAt = createdAt;
+    int jobNum = randNum();
+    return new Job(
+        UUID.randomUUID(),
+        "job" + jobNum,
+        "http://foo.bar/" + jobNum,
+        namespaceID,
+        null,
         Arrays.asList(randUrn(), randUrn()),
         Arrays.asList(randUrn(), randUrn()),
         createdAt,
-        updatedAt);
+        updatedAt,
+        type);
   }
 
   public static Job cloneJob(Job job) {
@@ -72,7 +89,8 @@ public class Generator {
         job.getInputDatasetUrns(),
         job.getOutputDatasetUrns(),
         job.getCreatedAt(),
-        job.getUpdatedAt());
+        job.getUpdatedAt(),
+        job.getType());
   }
 
   // Job Runs
@@ -196,7 +214,8 @@ public class Generator {
   // DatasetUrn
   public static DatasetUrn genDatasetUrn() {
     return DatasetUrn.from(
-        NamespaceName.fromString("ns" + randNum()), DatasetName.fromString("dataset" + randNum()));
+        DatasourceName.fromString("datasource" + randNum()),
+        DatasetName.fromString("dataset" + randNum()));
   }
 
   // Dataset Rows

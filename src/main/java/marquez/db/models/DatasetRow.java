@@ -31,4 +31,8 @@ public class DatasetRow {
   private String urn;
   private String description;
   private UUID currentVersionUuid;
+
+  public Boolean isNew() {
+    return createdAt.equals(updatedAt);
+  }
 }

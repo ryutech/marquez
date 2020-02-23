@@ -16,6 +16,7 @@ package marquez.service;
 
 import static java.util.Collections.unmodifiableList;
 
+import io.prometheus.client.Counter;
 import java.util.List;
 import java.util.Optional;
 import lombok.NonNull;
@@ -31,6 +32,13 @@ import org.jdbi.v3.core.statement.UnableToExecuteStatementException;
 
 @Slf4j
 public class NamespaceService {
+  private static final Counter namespaces =
+      Counter.build()
+          .namespace("marquez")
+          .name("namespace_total")
+          .help("Total number of namespaces.")
+          .register();
+
   private final NamespaceDao namespaceDao;
 
   public NamespaceService(@NonNull final NamespaceDao namespaceDao) throws MarquezServiceException {
@@ -48,6 +56,7 @@ public class NamespaceService {
     try {
       final NamespaceRow newNamespaceRow = NamespaceRowMapper.map(namespace);
       namespaceDao.insert(newNamespaceRow);
+      namespaces.inc();
     } catch (UnableToExecuteStatementException e) {
       log.error("Failed to create namespace: {}", namespace, e);
       throw new MarquezServiceException();
@@ -56,14 +65,11 @@ public class NamespaceService {
 
   public Namespace createOrUpdate(@NonNull Namespace namespace) throws MarquezServiceException {
     try {
-      final NamespaceRow newNamespaceRow = NamespaceRowMapper.map(namespace);
-      return namespaceDao
-          .insertAndGet(newNamespaceRow)
-          .map(NamespaceMapper::map)
-          .orElseThrow(
-              () ->
-                  new MarquezServiceException(
-                      String.format("Failed to insert namespace row: %s", newNamespaceRow)));
+      final NamespaceRow newRow = NamespaceRowMapper.map(namespace);
+      final NamespaceRow row =
+          namespaceDao.insertAndGet(newRow).orElseThrow(MarquezServiceException::new);
+      if (row.isNew()) namespaces.inc();
+      return NamespaceMapper.map(row);
     } catch (UnableToExecuteStatementException e) {
       log.error("Failed to create or update namespace: {}", namespace, e);
       throw new MarquezServiceException();

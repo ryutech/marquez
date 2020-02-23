@@ -18,11 +18,13 @@ import static java.lang.String.format;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNull;
+import static org.mockito.Mockito.mock;
 
 import java.util.List;
 import java.util.UUID;
 import marquez.api.resources.JobRunBaseTest;
 import marquez.common.models.NamespaceName;
+import marquez.gateway.LineageGraphGateway;
 import marquez.service.JobService;
 import marquez.service.NamespaceService;
 import marquez.service.exceptions.MarquezServiceException;
@@ -53,13 +55,22 @@ public class JobRunDaoTest extends JobRunBaseTest {
   protected static final JobRunDao jobRunDao = APP.onDemand(JobRunDao.class);
   protected static final JobRunStateDao jobRunStateDao = APP.onDemand(JobRunStateDao.class);
   protected static final JobRunArgsDao jobRunArgsDao = APP.onDemand(JobRunArgsDao.class);
+  protected static final DatasetDao datasetDao = APP.onDemand(DatasetDao.class);
+  protected static final LineageGraphGateway lineageGraphGateway = mock(LineageGraphGateway.class);
 
   protected static final int TEST_OFFSET = 0;
   protected static final int TEST_LIMIT = 10;
 
   protected static NamespaceService namespaceService;
   protected static final JobService jobService =
-      new JobService(jobDao, jobVersionDao, jobRunDao, jobRunArgsDao);
+      new JobService(
+          jobDao,
+          jobVersionDao,
+          jobRunDao,
+          jobRunArgsDao,
+          datasetDao,
+          lineageGraphGateway,
+          namespaceDao);
 
   @BeforeClass
   public static void setUpOnce() throws MarquezServiceException {

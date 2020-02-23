@@ -14,6 +14,8 @@ services:
       - POSTGRES_DB=marquez
       - POSTGRES_USER=buendia
       - POSTGRES_PASSWORD=macondo
+      - CAYLEY_HOST=cayleydb
+      - CAYLEY_PORT=64210
     volumes:
       - ./config.example.yml:/usr/src/app/config.yml
     depends_on:
@@ -31,3 +33,19 @@ services:
       - MARQUEZ_PASSWORD=macondo
     volumes:
       - ./docker/init-db.sh:/docker-entrypoint-initdb.d/init-db.sh
+
+  cayleydb:
+    image: 'quay.io/cayleygraph/cayley:latest'
+    ports:
+      - '64210:64210'
+    environment:
+      - CAYLEY_CFG=/data/cayley.yml
+      - POSTGRES_HOST=db
+      - POSTGRES_PORT=5432
+      - POSTGRES_DB=marquez
+      - POSTGRES_USER=buendia
+      - POSTGRES_PASSWORD=macondo
+    volumes:
+      - ./docker/cayley/:/data
+    depends_on:
+      - app

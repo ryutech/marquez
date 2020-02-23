@@ -12,23 +12,17 @@
  * limitations under the License.
  */
 
-package marquez.api.models;
+package marquez.api.exceptions;
 
-import java.util.List;
-import lombok.AllArgsConstructor;
-import lombok.Data;
-import lombok.NoArgsConstructor;
+import static marquez.common.Preconditions.checkNotNull;
 
-@Data
-@AllArgsConstructor
-@NoArgsConstructor
-public final class JobResponse {
-  private String name;
-  private String createdAt;
-  private String updatedAt;
-  private List<String> inputDatasetUrns;
-  private List<String> outputDatasetUrns;
-  private String location;
-  private String description;
-  private String type;
+import javax.ws.rs.NotFoundException;
+import marquez.common.models.JobName;
+
+public final class JobNotFoundException extends NotFoundException {
+  private static final long serialVersionUID = 1L;
+
+  public JobNotFoundException(final JobName jobName) {
+    super(String.format("Job '%s' not found.", checkNotNull(jobName).getValue()));
+  }
 }

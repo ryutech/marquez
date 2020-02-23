@@ -5,15 +5,19 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
 
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import marquez.db.DatasetDao;
 import marquez.db.JobDao;
 import marquez.db.JobRunArgsDao;
 import marquez.db.JobRunDao;
 import marquez.db.JobVersionDao;
+import marquez.db.NamespaceDao;
 import marquez.db.fixtures.AppWithPostgresRule;
+import marquez.gateway.LineageGraphGateway;
 import marquez.service.exceptions.MarquezServiceException;
 import marquez.service.models.Generator;
 import marquez.service.models.Job;
@@ -27,14 +31,25 @@ import org.junit.Test;
 
 public class JobServiceIntegrationTest {
   @ClassRule public static final AppWithPostgresRule APP = new AppWithPostgresRule();
+  final NamespaceDao namespaceDao = APP.onDemand(NamespaceDao.class);
   final JobDao jobDao = APP.onDemand(JobDao.class);
   final JobVersionDao jobVersionDao = APP.onDemand(JobVersionDao.class);
   final JobRunDao jobRunDao = APP.onDemand(JobRunDao.class);
   final JobRunArgsDao jobRunArgsDao = APP.onDemand(JobRunArgsDao.class);
+  final LineageGraphGateway lineageGraphGateway = mock(LineageGraphGateway.class);
+  final DatasetDao datasetDao = APP.onDemand(DatasetDao.class);
   final UUID namespaceID = UUID.randomUUID();
   final String namespaceName = "job_service_test_ns";
   final String jobOwner = "Amaranta";
-  JobService jobService = new JobService(jobDao, jobVersionDao, jobRunDao, jobRunArgsDao);
+  JobService jobService =
+      new JobService(
+          jobDao,
+          jobVersionDao,
+          jobRunDao,
+          jobRunArgsDao,
+          datasetDao,
+          lineageGraphGateway,
+          namespaceDao);
 
   @Before
   public void setup() {
@@ -89,7 +104,8 @@ public class JobServiceIntegrationTest {
             job.getNamespaceGuid(),
             job.getDescription(),
             job.getInputDatasetUrns(),
-            job.getOutputDatasetUrns());
+            job.getOutputDatasetUrns(),
+            job.getType());
     Job jobCreateRet =
         jobService.createJob(namespaceName, jobWithNewLoc); // should create new version implicitly
     Optional<Job> jobGetRet = jobService.getJob(namespaceName, job.getName());

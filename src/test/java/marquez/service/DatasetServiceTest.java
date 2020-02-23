@@ -23,16 +23,19 @@ import static marquez.db.models.DbModelGenerator.newDatasetRowExtendedWith;
 import static marquez.db.models.DbModelGenerator.newDatasetRowsExtended;
 import static marquez.db.models.DbModelGenerator.newDatasourceRowWith;
 import static marquez.db.models.DbModelGenerator.newNamespaceRowWith;
+import static marquez.gateway.models.GatewayModelGenerator.newLineageResultRow;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.assertj.core.api.Assertions.assertThatNullPointerException;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.time.Instant;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
@@ -51,9 +54,13 @@ import marquez.db.models.DatasetRow;
 import marquez.db.models.DatasetRowExtended;
 import marquez.db.models.DatasourceRow;
 import marquez.db.models.NamespaceRow;
+import marquez.gateway.LineageGraphGateway;
+import marquez.gateway.exceptions.GatewayException;
+import marquez.gateway.models.LineageResultRow;
 import marquez.service.exceptions.MarquezServiceException;
 import marquez.service.mappers.DatasetMapper;
 import marquez.service.models.Dataset;
+import marquez.service.models.LineageResult;
 import org.jdbi.v3.core.statement.UnableToExecuteStatementException;
 import org.junit.Before;
 import org.junit.Rule;
@@ -77,6 +84,8 @@ public class DatasetServiceTest {
   private static final DatasetName DATASET_NAME = newDatasetName();
   private static final DatasetUrn DATASET_URN = DatasetUrn.from(DATASOURCE_NAME, DATASET_NAME);
   private static final Description DESCRIPTION = newDescription();
+  private static final String TEST_NS = "testNamespace";
+
   final Dataset NEW_DATASET =
       Dataset.builder()
           .name(DATASET_NAME)
@@ -90,31 +99,46 @@ public class DatasetServiceTest {
   @Mock private DatasourceDao datasourceDao;
   @Mock private DatasetDao datasetDao;
   private DatasetService datasetService;
+  private LineageGraphGateway lineageGraphGateway;
 
   @Before
   public void setUp() {
-    datasetService = new DatasetService(namespaceDao, datasourceDao, datasetDao);
+    namespaceDao = mock(NamespaceDao.class);
+    datasourceDao = mock(DatasourceDao.class);
+    datasetDao = mock(DatasetDao.class);
+    lineageGraphGateway = mock(LineageGraphGateway.class);
+    datasetService =
+        new DatasetService(namespaceDao, datasourceDao, datasetDao, lineageGraphGateway);
   }
 
   @Test
   public void testNewDatasetService_throwsException_onNullNamespaceDao() {
     final NamespaceDao nullNamespaceDao = null;
     assertThatNullPointerException()
-        .isThrownBy(() -> new DatasetService(nullNamespaceDao, datasourceDao, datasetDao));
+        .isThrownBy(
+            () ->
+                new DatasetService(
+                    nullNamespaceDao, datasourceDao, datasetDao, lineageGraphGateway));
   }
 
   @Test
   public void testNewDatasetService_throwsException_onNullDatasourceDao() {
     final DatasourceDao nullDatasourceDao = null;
     assertThatNullPointerException()
-        .isThrownBy(() -> new DatasetService(namespaceDao, nullDatasourceDao, datasetDao));
+        .isThrownBy(
+            () ->
+                new DatasetService(
+                    namespaceDao, nullDatasourceDao, datasetDao, lineageGraphGateway));
   }
 
   @Test
   public void testNewDatasetService_throwsException_onNullDatasetDao() {
     final DatasetDao nullDatasetDao = null;
     assertThatNullPointerException()
-        .isThrownBy(() -> new DatasetService(namespaceDao, datasourceDao, nullDatasetDao));
+        .isThrownBy(
+            () ->
+                new DatasetService(
+                    namespaceDao, datasourceDao, nullDatasetDao, lineageGraphGateway));
   }
 
   @Test
@@ -275,5 +299,66 @@ public class DatasetServiceTest {
         .isThrownBy(() -> datasetService.getAll(NAMESPACE_NAME, LIMIT, OFFSET));
 
     verify(datasetDao, times(1)).findAll(NAMESPACE_NAME, LIMIT, OFFSET);
+  }
+
+  @Test
+  public void testGetLineage_OK() throws MarquezServiceException, GatewayException {
+    DatasetRowExtended datasetRow =
+        newDatasetRowExtendedWith(Description.fromString("dataset description"));
+    DatasetUrn datasetUrn = DatasetUrn.fromString(datasetRow.getUrn());
+    NamespaceRow namespaceRow = newNamespaceRowWith(NAMESPACE_NAME);
+    UUID uuid = datasetRow.getNamespaceUuid();
+    List<LineageResultRow> lineageResultRows =
+        Arrays.asList(newLineageResultRow(), newLineageResultRow());
+    when(datasetDao.findBy(datasetUrn)).thenReturn(Optional.of(datasetRow));
+    when(lineageGraphGateway.queryDatasetSubgraph(datasetRow, namespaceRow.getName()))
+        .thenReturn(lineageResultRows);
+    when(namespaceDao.findBy(uuid)).thenReturn(Optional.of(namespaceRow));
+
+    Optional<List<LineageResult>> results =
+        datasetService.getLineage(DatasetUrn.fromString(datasetRow.getUrn()));
+
+    verify(datasetDao).findBy(datasetUrn);
+    assertThat(results.isPresent());
+    assertThat(results.get().size()).isEqualTo(lineageResultRows.size());
+  }
+
+  @Test
+  public void testGetLineage_DatasetNotFound() throws MarquezServiceException, GatewayException {
+    DatasetRowExtended datasetRow =
+        newDatasetRowExtendedWith(Description.fromString("dataset description"));
+    DatasetUrn datasetUrn = DatasetUrn.fromString(datasetRow.getUrn());
+    when(datasetDao.findBy(datasetUrn)).thenReturn(Optional.empty());
+
+    Optional<List<LineageResult>> results = datasetService.getLineage(datasetUrn);
+
+    assertThat(results.isPresent()).isFalse();
+  }
+
+  @Test(expected = MarquezServiceException.class)
+  public void testGetLineage_UnableToExecuteStatementException_Err()
+      throws MarquezServiceException, GatewayException {
+    DatasetRowExtended datasetRow =
+        newDatasetRowExtendedWith(Description.fromString("dataset description"));
+    DatasetUrn datasetUrn = DatasetUrn.fromString(datasetRow.getUrn());
+    when(datasetDao.findBy(datasetUrn)).thenThrow(UnableToExecuteStatementException.class);
+
+    datasetService.getLineage(datasetUrn);
+  }
+
+  @Test(expected = MarquezServiceException.class)
+  public void testGetLineage_GatewayException_Err()
+      throws MarquezServiceException, GatewayException {
+    DatasetRowExtended datasetRow =
+        newDatasetRowExtendedWith(Description.fromString("dataset description"));
+    DatasetUrn datasetUrn = DatasetUrn.fromString(datasetRow.getUrn());
+    NamespaceRow namespaceRow = newNamespaceRowWith(NAMESPACE_NAME);
+    UUID uuid = datasetRow.getNamespaceUuid();
+    when(datasetDao.findBy(datasetUrn)).thenReturn(Optional.of(datasetRow));
+    when(lineageGraphGateway.queryDatasetSubgraph(datasetRow, namespaceRow.getName()))
+        .thenThrow(GatewayException.class);
+    when(namespaceDao.findBy(uuid)).thenReturn(Optional.of(namespaceRow));
+
+    datasetService.getLineage(datasetUrn);
   }
 }
