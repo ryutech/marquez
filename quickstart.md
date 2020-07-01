@@ -148,7 +148,7 @@ $ curl -X PUT http://localhost:5000/api/v1/namespaces/my-namespace/datasets/my-d
 
 #### STEP 4: ADD JOB TO NAMESPACE
 
-With metadata for `my-dataset` in Marquez, let's add the job `my-job`:
+With metadata for `my-dataset` in Marquez, let's now add the job `my-job`:
 
 ##### REQUEST
 
@@ -193,6 +193,8 @@ $ curl -X PUT http://localhost:5000/api/v1/namespaces/my-namespace/jobs/my-job \
 
 #### STEP 5: CREATE A RUN
 
+Then, create a run for `my-job`:
+
 ##### REQUEST
 
 ```bash
@@ -229,6 +231,8 @@ $ curl -X POST http://localhost:5000/api/v1/namespaces/my-namespace/jobs/my-job/
   }
 }
 ```
+
+The call returns a **run ID** `d46e465b-d358-4d32-83d4-df660ff614dd` used to track the execution of `my-job`. 
 
 #### STEP 6: START A RUN
 
