@@ -13,7 +13,7 @@ Before you begin, make sure you have installed:
 
 #### SETUP
 
-To checkout the Marquez source code run:
+To checkout the Marquez source code, run:
 
 ```
 $ git clone git@github.com:MarquezProject/marquez.git && cd marquez
@@ -21,7 +21,7 @@ $ git clone git@github.com:MarquezProject/marquez.git && cd marquez
 
 #### RUNNING WITH [DOCKER](https://github.com/MarquezProject/marquez/blob/main/Dockerfile)
 
-The easiest way to get up and running is with Docker. From the base of the Marquez repository run:
+The easiest way to get up and running is with Docker. From the base of the Marquez repository, run:
 
 ```
 $ docker-compose up
@@ -125,7 +125,7 @@ $ curl -X PUT http://localhost:5000/api/v1/namespaces/my-namespace/datasets/my-d
 ```bash
 {
   "id": {
-    "namespaceName": "my-namespace",
+    "namespace": "my-namespace",
     "name": "my-dataset"
   },
   "type": "DB_TABLE",
@@ -158,7 +158,7 @@ $ curl -X PUT http://localhost:5000/api/v1/namespaces/my-namespace/jobs/my-job \
   -d '{
         "type": "BATCH",
         "inputs": [{
-          "namespaceName": "my-namespace", 
+          "namespace": "my-namespace", 
           "name": "my-dataset"
         }],
         "outputs": [],
@@ -172,7 +172,7 @@ $ curl -X PUT http://localhost:5000/api/v1/namespaces/my-namespace/jobs/my-job \
 ```bash
 {
   "id": {
-    "namespaceName": "my-namespace",
+    "namespace": "my-namespace",
     "name": "my-job"
   },
   "type": "BATCH",
@@ -180,7 +180,7 @@ $ curl -X PUT http://localhost:5000/api/v1/namespaces/my-namespace/jobs/my-job \
   "createdAt": "2020-06-30T20:32:55.570981Z",
   "updatedAt": "2020-06-30T20:32:55.658594Z",
   "inputs": [{
-      "namespaceName": "my-namespace",
+      "namespace": "my-namespace",
       "name": "my-dataset"
   }],
   "outputs": [],
@@ -232,7 +232,9 @@ $ curl -X POST http://localhost:5000/api/v1/namespaces/my-namespace/jobs/my-job/
 }
 ```
 
-The call returns a **run ID** `d46e465b-d358-4d32-83d4-df660ff614dd` used to track the execution of our job.
+The call returns a **run ID** used to track the execution of our job.
+
+> **Note:** In this example, we use the ID `d46e465b-d358-4d32-83d4-df660ff614dd` to update the run metadata for `my-job`, but you'll want to replace the ID with your own.
 
 #### STEP 6: START A RUN
 
@@ -297,3 +299,7 @@ $ curl -X POST http://localhost:5000/api/v1/jobs/runs/d46e465b-d358-4d32-83d4-df
   }
 }
 ```
+
+## Summary
+
+In this example, we showed you how to use Marquez to collect dataset and job metadata. We also walked you through the set of [API](https://marquezproject.github.io/marquez/openapi.html) calls to successfully mark a run as complete.
