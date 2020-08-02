@@ -98,6 +98,7 @@ public class MarquezAppIntegrationTest {
 
   // DB TABLE SOURCE
   private static final marquez.service.models.Source DB_TABLE_SOURCE = newPostgresSource();
+  private static final String DB_TABLE_TYPE = DB_TABLE_SOURCE.getType().getValue();
   private static final String DB_TABLE_SOURCE_NAME = DB_TABLE_SOURCE.getName().getValue();
   private static final URI DB_TABLE_CONNECTION_URL = DB_TABLE_SOURCE.getConnectionUrl();
   private static final String DB_TABLE_SOURCE_DESCRIPTION = DB_TABLE_SOURCE.getDescription().get();
@@ -113,6 +114,7 @@ public class MarquezAppIntegrationTest {
 
   // STREAM SOURCE
   private static final marquez.service.models.Source STREAM_SOURCE = newKafkaSource();
+  private static final String STREAM_SOURCE_TYPE = STREAM_SOURCE.getType().getValue();
   private static final String STREAM_SOURCE_NAME = STREAM_SOURCE.getName().getValue();
   private static final URI STREAM_CONNECTION_URL = STREAM_SOURCE.getConnectionUrl();
   private static final String STREAM_SOURCE_DESCRIPTION = STREAM_SOURCE.getDescription().get();
@@ -189,7 +191,7 @@ public class MarquezAppIntegrationTest {
     // (2) Create source for db table
     final SourceMeta sourceMeta =
         SourceMeta.builder()
-            .type(DB_TABLE_SOURCE.getType().getValue())
+            .type(DB_TABLE_TYPE)
             .connectionUrl(DB_TABLE_CONNECTION_URL)
             .description(DB_TABLE_SOURCE_DESCRIPTION)
             .build();
@@ -264,7 +266,7 @@ public class MarquezAppIntegrationTest {
     // (2) Create source for stream
     final SourceMeta sourceMeta =
         SourceMeta.builder()
-            .type(STREAM_SOURCE.getType().getValue())
+            .type(STREAM_SOURCE_TYPE)
             .connectionUrl(STREAM_CONNECTION_URL)
             .description(STREAM_SOURCE_DESCRIPTION)
             .build();
@@ -335,7 +337,7 @@ public class MarquezAppIntegrationTest {
     // (2) Create source for input / output db tables
     final SourceMeta sourceMeta =
         SourceMeta.builder()
-            .type(STREAM_SOURCE.getType().getValue())
+            .type(STREAM_SOURCE_TYPE)
             .connectionUrl(STREAM_CONNECTION_URL)
             .description(STREAM_SOURCE_DESCRIPTION)
             .build();
