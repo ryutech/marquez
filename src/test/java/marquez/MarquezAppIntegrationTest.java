@@ -98,7 +98,7 @@ public class MarquezAppIntegrationTest {
 
   // DB TABLE SOURCE
   private static final marquez.service.models.Source DB_TABLE_SOURCE = newPostgresSource();
-  private static final String DB_TABLE_TYPE = DB_TABLE_SOURCE.getType().getValue();
+  private static final String DB_TABLE_SOURCE_TYPE = DB_TABLE_SOURCE.getType().getValue();
   private static final String DB_TABLE_SOURCE_NAME = DB_TABLE_SOURCE.getName().getValue();
   private static final URI DB_TABLE_CONNECTION_URL = DB_TABLE_SOURCE.getConnectionUrl();
   private static final String DB_TABLE_SOURCE_DESCRIPTION = DB_TABLE_SOURCE.getDescription().get();
@@ -191,7 +191,7 @@ public class MarquezAppIntegrationTest {
     // (2) Create source for db table
     final SourceMeta sourceMeta =
         SourceMeta.builder()
-            .type(DB_TABLE_TYPE)
+            .type(DB_TABLE_SOURCE_TYPE)
             .connectionUrl(DB_TABLE_CONNECTION_URL)
             .description(DB_TABLE_SOURCE_DESCRIPTION)
             .build();
