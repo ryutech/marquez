@@ -15,7 +15,7 @@
 package marquez.db.models;
 
 import static com.google.common.collect.ImmutableList.toImmutableList;
-import static marquez.common.models.ModelGenerator.newConnectionUrlFor;
+import static marquez.common.models.ModelGenerator.newConnectionUrl;
 import static marquez.common.models.ModelGenerator.newContext;
 import static marquez.common.models.ModelGenerator.newDatasetName;
 import static marquez.common.models.ModelGenerator.newDatasetType;
@@ -37,7 +37,6 @@ import marquez.common.Utils;
 import marquez.common.models.DatasetName;
 import marquez.common.models.NamespaceName;
 import marquez.common.models.SourceName;
-import marquez.common.models.SourceType;
 import marquez.service.models.Version;
 
 public final class ModelGenerator extends Generator {
@@ -67,14 +66,13 @@ public final class ModelGenerator extends Generator {
 
   public static SourceRow newSourceRowWith(final SourceName name) {
     final Instant now = newTimestamp();
-    final SourceType type = newSourceType();
     return new SourceRow(
         newRowUuid(),
-        type.name(),
+        newSourceType().getValue(),
         now,
         now,
         name.getValue(),
-        newConnectionUrlFor(type).toASCIIString(),
+        newConnectionUrl().toASCIIString(),
         newDescription());
   }
 

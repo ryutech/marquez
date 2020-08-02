@@ -39,7 +39,7 @@ public final class ModelGenerator extends Generator {
   }
 
   public static SourceType newSourceType() {
-    return SourceType.values()[newIdWithBound(SourceType.values().length - 1)];
+    return SourceType.of("POSTGRESQL");
   }
 
   public static SourceName newSourceName() {
@@ -47,32 +47,7 @@ public final class ModelGenerator extends Generator {
   }
 
   public static URI newConnectionUrl() {
-    return newConnectionUrlFor(SourceType.POSTGRESQL);
-  }
-
-  public static URI newConnectionUrlFor(SourceType type) {
-    String connectionUrlString;
-    switch (type) {
-      case MYSQL:
-        connectionUrlString = "jdbc:mysql://localhost:3306/test" + newId();
-        break;
-      case POSTGRESQL:
-        connectionUrlString = "jdbc:postgresql://localhost:5432/test" + newId();
-        break;
-      case REDSHIFT:
-        connectionUrlString =
-            "jdbc:redshift://we.us-west-2.redshift.amazonaws.com:5439/test" + newId();
-        break;
-      case SNOWFLAKE:
-        connectionUrlString = "jdbc:snowflake://we.snowflakecomputing.com/?db=test" + newId();
-        break;
-      case KAFKA:
-        connectionUrlString = "localhost:9092";
-        break;
-      default:
-        throw new IllegalArgumentException();
-    }
-    return URI.create(connectionUrlString);
+    return URI.create("jdbc:postgresql://localhost:5432/test" + newId());
   }
 
   public static ImmutableSet<DatasetId> newDatasetIds(final int limit) {

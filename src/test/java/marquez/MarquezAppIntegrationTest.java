@@ -4,7 +4,6 @@ import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.time.Instant.EPOCH;
 import static marquez.Generator.newTimestamp;
 import static marquez.common.models.ModelGenerator.newConnectionUrl;
-import static marquez.common.models.ModelGenerator.newConnectionUrlFor;
 import static marquez.common.models.ModelGenerator.newContext;
 import static marquez.common.models.ModelGenerator.newDatasetName;
 import static marquez.common.models.ModelGenerator.newDescription;
@@ -16,6 +15,8 @@ import static marquez.common.models.ModelGenerator.newNamespaceName;
 import static marquez.common.models.ModelGenerator.newOwnerName;
 import static marquez.common.models.ModelGenerator.newSourceName;
 import static marquez.common.models.ModelGenerator.newSourceType;
+import static marquez.service.models.ModelGenerator.newKafkaSource;
+import static marquez.service.models.ModelGenerator.newPostgresSource;
 import static marquez.service.models.ModelGenerator.newSchemaLocation;
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -53,7 +54,6 @@ import marquez.client.models.SourceMeta;
 import marquez.client.models.Stream;
 import marquez.client.models.StreamMeta;
 import marquez.client.models.Tag;
-import marquez.common.models.SourceType;
 import org.jdbi.v3.testing.JdbiRule;
 import org.junit.ClassRule;
 import org.junit.Test;
@@ -91,16 +91,18 @@ public class MarquezAppIntegrationTest {
   private static final String NAMESPACE_DESCRIPTION = newDescription();
 
   // SOURCE
-  private static final String SOURCE_TYPE = newSourceType().name();
+  private static final String SOURCE_TYPE = newSourceType().getValue();
   private static final String SOURCE_NAME = newSourceName().getValue();
   private static final URI CONNECTION_URL = newConnectionUrl();
   private static final String SOURCE_DESCRIPTION = newDescription();
 
+  // DB TABLE SOURCE
+  private static final marquez.service.models.Source DB_TABLE_SOURCE = newPostgresSource();
+  private static final String DB_TABLE_SOURCE_NAME = DB_TABLE_SOURCE.getName().getValue();
+  private static final URI DB_TABLE_CONNECTION_URL = DB_TABLE_SOURCE.getConnectionUrl();
+  private static final String DB_TABLE_SOURCE_DESCRIPTION = DB_TABLE_SOURCE.getDescription().get();
+
   // DB TABLE DATASET
-  private static final String DB_TABLE_SOURCE_TYPE = SourceType.POSTGRESQL.name();
-  private static final String DB_TABLE_SOURCE_NAME = newSourceName().getValue();
-  private static final URI DB_TABLE_CONNECTION_URL = newConnectionUrlFor(SourceType.POSTGRESQL);
-  private static final String DB_TABLE_SOURCE_DESCRIPTION = newDescription();
   private static final DatasetId DB_TABLE_ID = newDatasetIdWith(NAMESPACE_NAME);
   private static final String DB_TABLE_NAME = DB_TABLE_ID.getName();
   private static final String DB_TABLE_PHYSICAL_NAME = DB_TABLE_NAME;
@@ -109,11 +111,13 @@ public class MarquezAppIntegrationTest {
       ImmutableList.of(newFieldWith(SENSITIVE.getName()), newField());
   private static final Set<String> DB_TABLE_TAGS = ImmutableSet.of(PII.getName());
 
+  // STREAM SOURCE
+  private static final marquez.service.models.Source STREAM_SOURCE = newKafkaSource();
+  private static final String STREAM_SOURCE_NAME = STREAM_SOURCE.getName().getValue();
+  private static final URI STREAM_CONNECTION_URL = STREAM_SOURCE.getConnectionUrl();
+  private static final String STREAM_SOURCE_DESCRIPTION = STREAM_SOURCE.getDescription().get();
+
   // STREAM DATASET
-  private static final String STREAM_SOURCE_TYPE = SourceType.KAFKA.name();
-  private static final String STREAM_SOURCE_NAME = newSourceName().getValue();
-  private static final URI STREAM_CONNECTION_URL = newConnectionUrlFor(SourceType.KAFKA);
-  private static final String STREAM_SOURCE_DESCRIPTION = newDescription();
   private static final DatasetId STREAM_ID = newDatasetIdWith(NAMESPACE_NAME);
   private static final String STREAM_NAME = STREAM_ID.getName();
   private static final String STREAM_PHYSICAL_NAME = STREAM_NAME;
@@ -185,7 +189,7 @@ public class MarquezAppIntegrationTest {
     // (2) Create source for db table
     final SourceMeta sourceMeta =
         SourceMeta.builder()
-            .type(DB_TABLE_SOURCE_TYPE)
+            .type(DB_TABLE_SOURCE.getType().getValue())
             .connectionUrl(DB_TABLE_CONNECTION_URL)
             .description(DB_TABLE_SOURCE_DESCRIPTION)
             .build();
@@ -260,7 +264,7 @@ public class MarquezAppIntegrationTest {
     // (2) Create source for stream
     final SourceMeta sourceMeta =
         SourceMeta.builder()
-            .type(STREAM_SOURCE_TYPE)
+            .type(STREAM_SOURCE.getType().getValue())
             .connectionUrl(STREAM_CONNECTION_URL)
             .description(STREAM_SOURCE_DESCRIPTION)
             .build();
@@ -331,7 +335,7 @@ public class MarquezAppIntegrationTest {
     // (2) Create source for input / output db tables
     final SourceMeta sourceMeta =
         SourceMeta.builder()
-            .type(STREAM_SOURCE_TYPE)
+            .type(STREAM_SOURCE.getType().getValue())
             .connectionUrl(STREAM_CONNECTION_URL)
             .description(STREAM_SOURCE_DESCRIPTION)
             .build();

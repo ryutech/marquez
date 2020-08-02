@@ -16,7 +16,7 @@ package marquez.service.models;
 
 import static com.google.common.collect.ImmutableSet.toImmutableSet;
 import static java.time.temporal.ChronoUnit.HOURS;
-import static marquez.common.models.ModelGenerator.newConnectionUrlFor;
+import static marquez.common.models.ModelGenerator.newConnectionUrl;
 import static marquez.common.models.ModelGenerator.newContext;
 import static marquez.common.models.ModelGenerator.newDatasetId;
 import static marquez.common.models.ModelGenerator.newDatasetIds;
@@ -36,6 +36,7 @@ import static marquez.common.models.ModelGenerator.newTagNames;
 
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
+import java.net.URI;
 import java.net.URL;
 import java.time.Instant;
 import java.util.UUID;
@@ -69,14 +70,47 @@ public final class ModelGenerator extends Generator {
   }
 
   public static Source newSource() {
-    return newSourceWith(newSourceName());
+    return newSourceWith(newSourceType(), newConnectionUrl());
+  }
+
+  public static Source newMySqlSource() {
+    return newSourceWith(
+        SourceType.of("MYSQL"), URI.create("jdbc:mysql://localhost:3306/test" + newId()));
+  }
+
+  public static Source newPostgresSource() {
+    return newSourceWith(
+        SourceType.of("POSTGRESQL"), URI.create("jdbc:postgresql://localhost:5432/test" + newId()));
+  }
+
+  public static Source newRedshiftSource() {
+    return newSourceWith(
+        SourceType.of("REDSHIFT"),
+        URI.create("jdbc:redshift://test.us-west-2.redshift.amazonaws.com:5439/test" + newId()));
+  }
+
+  public static Source newSnowflakeSource() {
+    return newSourceWith(
+        SourceType.of("SNOWFLAKE"),
+        URI.create("jdbc:snowflake://test.snowflakecomputing.com/?db=test" + newId()));
+  }
+
+  public static Source newKafkaSource() {
+    return newSourceWith(SourceType.of("KAFKA"), URI.create("localhost:9092"));
   }
 
   public static Source newSourceWith(final SourceName sourceName) {
+    return newSourceWith(sourceName, newSourceType(), newConnectionUrl());
+  }
+
+  public static Source newSourceWith(final SourceType sourceType, final URI connectionUrl) {
+    return newSourceWith(newSourceName(), sourceType, connectionUrl);
+  }
+
+  public static Source newSourceWith(
+      final SourceName sourceName, final SourceType sourceType, final URI connectionUrl) {
     final Instant now = newTimestamp();
-    final SourceType sourceType = newSourceType();
-    return new Source(
-        sourceType, sourceName, now, now, newConnectionUrlFor(sourceType), newDescription());
+    return new Source(sourceType, sourceName, now, now, connectionUrl, newDescription());
   }
 
   public static DbTable newDbTable() {
